@@ -721,23 +721,23 @@ function chaincode_usage {
 }
 
 function all {
-    # generate cryptogen
-    # up
-    # channel create centralbank regulatory
-    # channel create centralbank user
-    # sleep 10s
-    # channel join 0 centralbank regulatory
-    # channel join 0 commercialbank regulatory
-    # channel join 1 commercialbank regulatory
-    # channel join 0 centralbank user
-    # channel join 0 commercialbank user
-    # channel join 1 commercialbank user
-    # channel join 0 consumer user
-    # channel join 1 consumer user
-    # channel join 2 consumer user
-    # chaincode install
-    # chaincode invoke
-    # sleep 5s
+    generate cryptogen
+    up
+    channel create centralbank regulatory
+    channel create centralbank user
+    sleep 10s
+    channel join 0 centralbank regulatory
+    channel join 0 commercialbank regulatory
+    channel join 1 commercialbank regulatory
+    channel join 0 centralbank user
+    channel join 0 commercialbank user
+    channel join 1 commercialbank user
+    channel join 0 consumer user
+    channel join 1 consumer user
+    channel join 2 consumer user
+    chaincode install
+    chaincode invoke
+    sleep 5s
     chaincode query
 }
 
