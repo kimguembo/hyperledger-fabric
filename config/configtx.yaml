@@ -369,6 +369,16 @@ Profiles:
                     - *centralbankOrg
                     - *commercialbankOrg
                     - *consumerOrg
+    CentralbankChannel:
+        Consortium: ISLab
+        <<: *ChannelDefaults
+        Application:
+            <<: *ApplicationDefaults
+            Organizations:
+                - *centralbankOrg
+            Capabilities:
+                <<: *ApplicationCapabilities
+
     RegulatoryChannel:
         Consortium: ISLab
         <<: *ChannelDefaults

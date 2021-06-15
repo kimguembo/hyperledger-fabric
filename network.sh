@@ -373,6 +373,16 @@ function generate {
         configtxgen -configPath /tmp/config \
         -profile SystemChannel -channelID system-channel -outputBlock ./genesis.block
 
+    echo "CentralbankChannel"
+    docker run --rm --name fabric-tools \
+        -v $ADIR/crypto-config:/tmp/crypto-config \
+        -v $CDIR:/tmp/config \
+        -v $TDIR:/tmp/tx \
+        -w /tmp/tx \
+        hyperledger/fabric-tools:2.2 \
+        configtxgen -configPath /tmp/config \
+        -profile CentralbankChannel -channelID centralbank-channel -outputCreateChannelTx ./centralbank-channel.tx
+
     echo "RegulatoryChannel"
     docker run --rm --name fabric-tools \
         -v $ADIR/crypto-config:/tmp/crypto-config \
@@ -723,9 +733,11 @@ function chaincode_usage {
 function all {
     generate cryptogen
     up
+    channel create centralbank centralbank
     channel create centralbank regulatory
     channel create centralbank user
     sleep 10s
+    channel join 0 centralbank centralbank
     channel join 0 centralbank regulatory
     channel join 0 commercialbank regulatory
     channel join 1 commercialbank regulatory
