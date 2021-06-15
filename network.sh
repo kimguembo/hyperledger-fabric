@@ -8,11 +8,11 @@ TDIR=$ADIR/tx
 BLKDIR=$ADIR/block
 ORDIR=$ACDIR/ordererOrganizations
 
-COMPOSE_FILE_PEER=docker-compose/docker-compose-peer.yaml
-COMPOSE_FILE_ORDERER=docker-compose/docker-compose-orderer.yaml
-COMPOSE_FILE_COUCH=docker-compose/docker-compose-couch.yaml
-COMPOSE_FILE_CLI=docker-compose/docker-compose-cli.yaml
-COMPOSE_FILE_CA=docker-compose/docker-compose-ca.yaml
+COMPOSE_FILE_PEER=dockercompose/docker-compose-peer.yaml
+COMPOSE_FILE_ORDERER=dockercompose/docker-compose-orderer.yaml
+COMPOSE_FILE_COUCH=dockercompose/docker-compose-couch.yaml
+COMPOSE_FILE_CLI=dockercompose/docker-compose-cli.yaml
+COMPOSE_FILE_CA=dockercompose/docker-compose-ca.yaml
 IMAGETAG="2.2"
 CA_IMAGETAG="1.4.9"
 usermod -aG docker $USER
