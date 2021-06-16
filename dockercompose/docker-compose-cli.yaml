@@ -33,6 +33,7 @@ services:
           - ../build/artifacts/tx:/opt/gopath/src/github.com/hyperledger/fabric/peer/tx
           - ../build/artifacts/block:/opt/gopath/src/github.com/hyperledger/fabric/peer/block
           - ../chaincode-go:/opt/gopath/src/github.com/asset-transfer-basic/chaincode-go
+          - ../chaincode-user:/opt/gopath/src/github.com/asset-transfer-basic/chaincode-user
           - ../atcc://opt/gopath/src/github.com/mychaincode
       depends_on:
         - peer0.centralbank.islab.re.kr

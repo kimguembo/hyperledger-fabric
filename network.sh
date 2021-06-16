@@ -331,6 +331,7 @@ function clean {
     rm -Rf $BDIR
     rm -Rf channel-artifacts
     rm -Rf ./chaincode-go/vendor
+    rm -Rf ./chaincode-user/vendor
     rm -Rf ./atcc/vendor
 }
 
@@ -470,8 +471,17 @@ function packageChaincode() {
 
     docker exec -i -t \
         cli peer lifecycle chaincode package mychaincode.tar.gz \
-            --path /opt/gopath/src/github.com/asset-transfer-basic/chaincode-go/chaincode \
+            --path /opt/gopath/src/github.com/asset-transfer-basic/chaincode-go \
             --label mychaincode_1.0
+
+    docker exec -i -t \
+        -w /opt/gopath/src/github.com/asset-transfer-basic/chaincode-user \
+        cli go mod vendor
+
+    docker exec -i -t \
+        cli peer lifecycle chaincode package userchaincode.tar.gz \
+            --path /opt/gopath/src/github.com/asset-transfer-basic/chaincode-user \
+            --label userchaincode_1.0
 
     # my chaincode
     # docker exec -i -t \
@@ -492,11 +502,14 @@ function allinstallChaincode() {
     installChaincode 0 consumer
     installChaincode 1 consumer
     installChaincode 2 consumer
+
+    installChaincode 0 centralbank mychaincode
 }
 
 function installChaincode() {
     number=${1:-0}
     org=${2:-centralbank}
+    chaincodeName=${3:-userchaincode}
     TLS_PATH=/opt/gopath/src/github.com/hyperledger/fabric/peer/organizations/peerOrganizations/${org}.islab.re.kr/peers/peer${number}.${org}.islab.re.kr/tls
     docker exec -i -t \
         -e CORE_PEER_LOCALMSPID=${org}Org \
@@ -506,7 +519,7 @@ function installChaincode() {
         -e CORE_PEER_TLS_ROOTCERT_FILE=$TLS_PATH/ca.crt \
         -e CORE_PEER_MSPCONFIGPATH=/opt/gopath/src/github.com/hyperledger/fabric/peer/organizations/peerOrganizations/${org}.islab.re.kr/users/Admin@${org}.islab.re.kr/msp \
         -e CORE_PEER_ADDRESS=peer${number}.${org}.islab.re.kr:7051 \
-        cli peer lifecycle chaincode install mychaincode.tar.gz \
+        cli peer lifecycle chaincode install ${chaincodeName}.tar.gz \
             --peerAddresses peer${number}.${org}.islab.re.kr:7051 \
             --tlsRootCertFiles ${TLS_PATH}/server.crt
 }
@@ -518,6 +531,7 @@ function allqueryInstalled() {
     queryInstalled 0 consumer
     queryInstalled 1 consumer
     queryInstalled 2 consumer
+
 }
 
 function queryInstalled() {
@@ -548,10 +562,28 @@ function allapproveForMyOrg() {
     sleep 1
     approveForMyOrg consumer
     allcheckCommitReadiness
+
+    sleep 1
+
+    approveForMyOrg centralbank mychaincode centralbank-channel 3c9beff854f544635245b620e4a3f01061138506f8f52c6e62761e95e8f59da3
+    sleep 1
+    checkCommitReadiness centralbank mychaincode centralbank-channel
 }
+
+
 
 function approveForMyOrg() {
     org=${1:-centralbank}
+    chaincodeName=${2:-userchaincode}
+    channel=${3:-user-channel}
+    packid=${4:-a606cf68193104909c90a1131bb0533b7d2e16b65ee755348f305c68643a0aa5}
+    policy="OR('centralbankOrg.peer'"
+    if [ "$channel" == "user-channel" ]; then
+        policy+=",'commercialbankOrg.peer','consumerOrg.peer'"
+    fi
+    
+    policy+=')'
+
     TLS_PATH=/opt/gopath/src/github.com/hyperledger/fabric/peer/organizations/peerOrganizations/${org}.islab.re.kr/peers/peer0.${org}.islab.re.kr/tls
     ORDERER_CA=/opt/gopath/src/github.com/hyperledger/fabric/peer/organizations/ordererOrganizations/islab.re.kr/orderers/orderer0.islab.re.kr/msp/tlscacerts/tlsca.islab.re.kr-cert.pem
     # sample chaincode
@@ -566,12 +598,12 @@ function approveForMyOrg() {
         cli peer lifecycle chaincode approveformyorg \
             -o orderer0.islab.re.kr:7050 \
             --tls --cafile $ORDERER_CA \
-            --channelID user-channel \
-            --name mychaincode \
+            --channelID ${channel} \
+            --name ${chaincodeName} \
             --version 1.0 \
-            --package-id mychaincode_1.0:ecf1b713c5b2180271e3461a5f84add320219724af3ae3c034dc238907302939 \
+            --package-id ${chaincodeName}_1.0:${packid} \
             --sequence 1 \
-            --signature-policy "OR('centralbankOrg.peer','commercialbankOrg.peer','consumerOrg.peer')"
+            --signature-policy ${policy}
 
     # my chaincode
     # docker exec -i -t \
@@ -601,6 +633,15 @@ function allcheckCommitReadiness() {
 
 function checkCommitReadiness() {
     org=${1:-centralbank}
+    chaincodeName=${2:-userchaincode}
+    channel=${3:-user-channel}
+    policy="OR('centralbankOrg.peer'"
+    if [ "$channel" == "user-channel" ]; then
+        policy+=",'commercialbankOrg.peer','consumerOrg.peer'"
+    fi
+    
+    policy+=')'
+
     TLS_PATH=/opt/gopath/src/github.com/hyperledger/fabric/peer/organizations/peerOrganizations/${org}.islab.re.kr/peers/peer0.${org}.islab.re.kr/tls
     ORDERER_CA=/opt/gopath/src/github.com/hyperledger/fabric/peer/organizations/ordererOrganizations/islab.re.kr/orderers/orderer0.islab.re.kr/msp/tlscacerts/tlsca.islab.re.kr-cert.pem
     docker exec -i -t \
@@ -613,17 +654,27 @@ function checkCommitReadiness() {
         -e CORE_PEER_ADDRESS=peer0.${org}.islab.re.kr:7051 \
         cli peer lifecycle chaincode checkcommitreadiness \
         -o orderer0.islab.re.kr:7050 \
-        --channelID user-channel \
+        --channelID ${channel} \
         --tls --cafile $ORDERER_CA \
-        --name mychaincode \
+        --name ${chaincodeName} \
         --version 1.0 \
         --sequence 1 \
-        --signature-policy "OR('centralbankOrg.peer','commercialbankOrg.peer','consumerOrg.peer')"
-
+        --signature-policy $policy
+        # "OR('centralbankOrg.peer','commercialbankOrg.peer','consumerOrg.peer')"
 }
 
 function commitChaincodeDefinition() {
     org=${1:-centralbank}
+    chaincodeName=${2:-userchaincode}
+    channel=${3:-user-channel}
+  
+    policy="OR('centralbankOrg.peer'"
+    if [ "$channel" == "user-channel" ]; then
+        policy+=",'commercialbankOrg.peer','consumerOrg.peer'"
+    fi
+
+    policy+=')'
+
     TLS_PATH=/opt/gopath/src/github.com/hyperledger/fabric/peer/organizations/peerOrganizations/${org}.islab.re.kr/peers/peer0.${org}.islab.re.kr/tls
     ORDERER_CA=/opt/gopath/src/github.com/hyperledger/fabric/peer/organizations/ordererOrganizations/islab.re.kr/orderers/orderer0.islab.re.kr/msp/tlscacerts/tlsca.islab.re.kr-cert.pem
     PEER_0_COMMERCIALBANK_TLS_CA_CERT=/opt/gopath/src/github.com/hyperledger/fabric/peer/organizations/peerOrganizations/commercialbank.islab.re.kr/peers/peer0.commercialbank.islab.re.kr/tls/ca.crt
@@ -643,8 +694,8 @@ function commitChaincodeDefinition() {
         cli peer lifecycle chaincode commit \
             -o orderer0.islab.re.kr:7050 \
             --tls --cafile $ORDERER_CA \
-            --channelID user-channel \
-            --name mychaincode \
+            --channelID ${channel} \
+            --name ${chaincodeName} \
             --version 1.0 \
             --peerAddresses peer0.commercialbank.islab.re.kr:7051 \
             --tlsRootCertFiles $PEER_0_COMMERCIALBANK_TLS_CA_CERT \
@@ -659,11 +710,14 @@ function commitChaincodeDefinition() {
             --peerAddresses peer0.centralbank.islab.re.kr:7051 \
             --tlsRootCertFiles $PEER_0_CENTRALBANK_TLS_CA \
             --sequence 1 \
-            --signature-policy "OR('centralbankOrg.peer','commercialbankOrg.peer','consumerOrg.peer')"
+            --signature-policy $policy
 }
 
 function queryCommitted() {
     org=${1:-centralbank}
+    chaincodeName=${2:-userchaincode}
+    channel=${3:-user-channel}
+
     TLS_PATH=/opt/gopath/src/github.com/hyperledger/fabric/peer/organizations/peerOrganizations/${org}.islab.re.kr/peers/peer0.${org}.islab.re.kr/tls
     ORDERER_CA=/opt/gopath/src/github.com/hyperledger/fabric/peer/organizations/ordererOrganizations/islab.re.kr/orderers/orderer0.islab.re.kr/msp/tlscacerts/tlsca.islab.re.kr-cert.pem
     docker exec -i -t \
@@ -675,12 +729,14 @@ function queryCommitted() {
         -e CORE_PEER_MSPCONFIGPATH=/opt/gopath/src/github.com/hyperledger/fabric/peer/organizations/peerOrganizations/${org}.islab.re.kr/users/Admin@${org}.islab.re.kr/msp \
         -e CORE_PEER_ADDRESS=peer0.${org}.islab.re.kr:7051 \
         cli peer lifecycle chaincode querycommitted \
-            --channelID user-channel \
-            --name mychaincode
+            --channelID ${channel} \
+            --name ${chaincodeName}
 }
 
 function chaincodeInvoke() {
     org=${1:-centralbank}
+    chaincodeName=${2:-userchaincode}
+    channel=${3:-user-channel}
     TLS_PATH=/opt/gopath/src/github.com/hyperledger/fabric/peer/organizations/peerOrganizations/${org}.islab.re.kr/peers/peer0.${org}.islab.re.kr/tls
     ORDERER_CA=/opt/gopath/src/github.com/hyperledger/fabric/peer/organizations/ordererOrganizations/islab.re.kr/orderers/orderer0.islab.re.kr/msp/tlscacerts/tlsca.islab.re.kr-cert.pem
     docker exec -i -t \
@@ -694,17 +750,44 @@ function chaincodeInvoke() {
         cli peer chaincode invoke \
             -o orderer0.islab.re.kr:7050 \
             --tls --cafile $ORDERER_CA \
-            --channelID user-channel \
-            --name mychaincode \
+            --channelID ${channel} \
+            --name ${chaincodeName} \
             -c '{"Args":["InitBalance"]}'
             # -c '{"Args":["UpdateTotalBalance", "9000"]}'
             # -c '{"Args":["InitLedger"]}'
 
 
 }
+function chaincodeInvokeTest() {
+    org=${1:-centralbank}
+    chaincodeName=${2:-userchaincode}
+    channel=${3:-user-channel}
+    TLS_PATH=/opt/gopath/src/github.com/hyperledger/fabric/peer/organizations/peerOrganizations/${org}.islab.re.kr/peers/peer0.${org}.islab.re.kr/tls
+    ORDERER_CA=/opt/gopath/src/github.com/hyperledger/fabric/peer/organizations/ordererOrganizations/islab.re.kr/orderers/orderer0.islab.re.kr/msp/tlscacerts/tlsca.islab.re.kr-cert.pem
+    docker exec -i -t \
+        -e CORE_PEER_LOCALMSPID=${org}Org \
+        -e CORE_PEER_TLS_ENABLED=true \
+        -e CORE_PEER_TLS_CERT_FILE=$TLS_PATH/server.crt \
+        -e CORE_PEER_TLS_KEY_FILE=$TLS_PATH/server.key \
+        -e CORE_PEER_TLS_ROOTCERT_FILE=$TLS_PATH/ca.crt \
+        -e CORE_PEER_MSPCONFIGPATH=/opt/gopath/src/github.com/hyperledger/fabric/peer/organizations/peerOrganizations/${org}.islab.re.kr/users/Admin@${org}.islab.re.kr/msp \
+        -e CORE_PEER_ADDRESS=peer0.${org}.islab.re.kr:7051 \
+        cli peer chaincode invoke \
+            -o orderer0.islab.re.kr:7050 \
+            --tls --cafile $ORDERER_CA \
+            --channelID ${channel} \
+            --name ${chaincodeName} \
+            -c '{"Args":["InitLedger"]}'
+            # -c '{"Args":["InitBalance"]}'
+            # -c '{"Args":["UpdateTotalBalance", "9000"]}'
+
+
+}
 
 function chaincodeQuery() {
     org=${1:-centralbank}
+    chaincodeName=${2:-userchaincode}
+    channel=${3:-user-channel}
     TLS_PATH=/opt/gopath/src/github.com/hyperledger/fabric/peer/organizations/peerOrganizations/${org}.islab.re.kr/peers/peer0.${org}.islab.re.kr/tls
     ORDERER_CA=/opt/gopath/src/github.com/hyperledger/fabric/peer/organizations/ordererOrganizations/islab.re.kr/orderers/orderer0.islab.re.kr/msp/tlscacerts/tlsca.islab.re.kr-cert.pem
     docker exec -i -t \
@@ -716,12 +799,54 @@ function chaincodeQuery() {
         -e CORE_PEER_MSPCONFIGPATH=/opt/gopath/src/github.com/hyperledger/fabric/peer/organizations/peerOrganizations/${org}.islab.re.kr/users/Admin@${org}.islab.re.kr/msp \
         -e CORE_PEER_ADDRESS=peer0.${org}.islab.re.kr:7051 \
         cli peer chaincode query \
-            --channelID user-channel \
-            --name mychaincode \
+            --channelID ${channel} \
+            --name ${chaincodeName} \
             -c '{"Args":["ReadTotalBalance"]}'
             # -c '{"Args":["ReadTotalBalanceAll"]}'
 
             
+}
+
+function chaincodeQueryTest() {
+    org=${1:-centralbank}
+    chaincodeName=${2:-userchaincode}
+    channel=${3:-user-channel}
+    TLS_PATH=/opt/gopath/src/github.com/hyperledger/fabric/peer/organizations/peerOrganizations/${org}.islab.re.kr/peers/peer0.${org}.islab.re.kr/tls
+    ORDERER_CA=/opt/gopath/src/github.com/hyperledger/fabric/peer/organizations/ordererOrganizations/islab.re.kr/orderers/orderer0.islab.re.kr/msp/tlscacerts/tlsca.islab.re.kr-cert.pem
+    docker exec -i -t \
+        -e CORE_PEER_LOCALMSPID=${org}Org \
+        -e CORE_PEER_TLS_ENABLED=true \
+        -e CORE_PEER_TLS_CERT_FILE=$TLS_PATH/server.crt \
+        -e CORE_PEER_TLS_KEY_FILE=$TLS_PATH/server.key \
+        -e CORE_PEER_TLS_ROOTCERT_FILE=$TLS_PATH/ca.crt \
+        -e CORE_PEER_MSPCONFIGPATH=/opt/gopath/src/github.com/hyperledger/fabric/peer/organizations/peerOrganizations/${org}.islab.re.kr/users/Admin@${org}.islab.re.kr/msp \
+        -e CORE_PEER_ADDRESS=peer0.${org}.islab.re.kr:7051 \
+        cli peer chaincode query \
+            --channelID ${channel} \
+            --name ${chaincodeName} \
+            -c '{"Args":["GetAllAssets"]}'
+            # -c '{"Args":["ReadTotalBalanceAll"]}'
+
+            
+}
+
+function chaincodeList(){
+    org=${1:-commercialbank}
+    TLS_PATH=/opt/gopath/src/github.com/hyperledger/fabric/peer/organizations/peerOrganizations/${org}.islab.re.kr/peers/peer0.${org}.islab.re.kr/tls
+    ORDERER_CA=/opt/gopath/src/github.com/hyperledger/fabric/peer/organizations/ordererOrganizations/islab.re.kr/orderers/orderer0.islab.re.kr/msp/tlscacerts/tlsca.islab.re.kr-cert.pem
+    docker exec -i -t \
+        -e CORE_PEER_LOCALMSPID=${org}Org \
+        -e CORE_PEER_TLS_ENABLED=true \
+        -e CORE_PEER_TLS_CERT_FILE=$TLS_PATH/server.crt \
+        -e CORE_PEER_TLS_KEY_FILE=$TLS_PATH/server.key \
+        -e CORE_PEER_TLS_ROOTCERT_FILE=$TLS_PATH/ca.crt \
+        -e CORE_PEER_MSPCONFIGPATH=/opt/gopath/src/github.com/hyperledger/fabric/peer/organizations/peerOrganizations/${org}.islab.re.kr/users/Admin@${org}.islab.re.kr/msp \
+        -e CORE_PEER_ADDRESS=peer0.${org}.islab.re.kr:7051 \
+        cli peer chaincode list \
+            --installed \
+            -o orderer0.islab.re.kr:7050 \
+            --tls --cafile $ORDERER_CA \
+            --channelID centralbank-channel
 }
 
 function usage {
@@ -753,10 +878,10 @@ function all {
     channel join 0 consumer user
     channel join 1 consumer user
     channel join 2 consumer user
-    chaincode install
-    chaincode invoke
-    sleep 5s
-    chaincode query
+    # chaincode install
+    # chaincode invoke
+    # sleep 5s
+    # chaincode query
 }
 
 function chaincode_install {
@@ -765,15 +890,21 @@ function chaincode_install {
     # allqueryInstalled
     # allapproveForMyOrg
     # commitChaincodeDefinition centralbank
+    # commitChaincodeDefinition centralbank mychaincode centralbank-channel
     queryCommitted centralbank
+    queryCommitted centralbank mychaincode centralbank-channel
 }
 
 function chaincode_invoke {
-    chaincodeInvoke centralbank
+    # chaincodeInvokeTest centralbank
+    chaincodeInvoke centralbank mychaincode centralbank-channel
+
+    # chaincodeList centralbank
 }
 
 function chaincode_query {
-    chaincodeQuery centralbank
+    chaincodeQuery centralbank mychaincode centralbank-channel
+    # chaincodeQueryTest centralbank
 }
 
 function chaincode {
