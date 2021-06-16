@@ -470,7 +470,7 @@ function packageChaincode() {
 
     docker exec -i -t \
         cli peer lifecycle chaincode package mychaincode.tar.gz \
-            --path /opt/gopath/src/github.com/asset-transfer-basic/chaincode-go \
+            --path /opt/gopath/src/github.com/asset-transfer-basic/chaincode-go/chaincode \
             --label mychaincode_1.0
 
     # my chaincode
@@ -569,9 +569,9 @@ function approveForMyOrg() {
             --channelID user-channel \
             --name mychaincode \
             --version 1.0 \
-            --package-id mychaincode_1.0:29c02707eeac8b0ea3a398bda48ecb8365216e2d2ce3d327f9a645465219cf2b \
+            --package-id mychaincode_1.0:ecf1b713c5b2180271e3461a5f84add320219724af3ae3c034dc238907302939 \
             --sequence 1 \
-            --signature-policy "OR('centralbankOrg.member','commercialbankOrg.member','consumerOrg.member')"
+            --signature-policy "OR('centralbankOrg.peer','commercialbankOrg.peer','consumerOrg.peer')"
 
     # my chaincode
     # docker exec -i -t \
@@ -618,7 +618,7 @@ function checkCommitReadiness() {
         --name mychaincode \
         --version 1.0 \
         --sequence 1 \
-        --signature-policy "OR('centralbankOrg.member','commercialbankOrg.member','consumerOrg.member')"
+        --signature-policy "OR('centralbankOrg.peer','commercialbankOrg.peer','consumerOrg.peer')"
 
 }
 
@@ -659,7 +659,7 @@ function commitChaincodeDefinition() {
             --peerAddresses peer0.centralbank.islab.re.kr:7051 \
             --tlsRootCertFiles $PEER_0_CENTRALBANK_TLS_CA \
             --sequence 1 \
-            --signature-policy "OR('centralbankOrg.member','commercialbankOrg.member','consumerOrg.member')"
+            --signature-policy "OR('centralbankOrg.peer','commercialbankOrg.peer','consumerOrg.peer')"
 }
 
 function queryCommitted() {
@@ -696,7 +696,10 @@ function chaincodeInvoke() {
             --tls --cafile $ORDERER_CA \
             --channelID user-channel \
             --name mychaincode \
-            -c '{"Args":["InitLedger"]}'
+            -c '{"Args":["InitBalance"]}'
+            # -c '{"Args":["UpdateTotalBalance", "9000"]}'
+            # -c '{"Args":["InitLedger"]}'
+
 
 }
 
@@ -715,7 +718,10 @@ function chaincodeQuery() {
         cli peer chaincode query \
             --channelID user-channel \
             --name mychaincode \
-            -c '{"Args":["GetAllAssets"]}'
+            -c '{"Args":["ReadTotalBalance"]}'
+            # -c '{"Args":["ReadTotalBalanceAll"]}'
+
+            
 }
 
 function usage {
@@ -754,11 +760,11 @@ function all {
 }
 
 function chaincode_install {
-    packageChaincode
-    allinstallChaincode
-    allqueryInstalled
-    allapproveForMyOrg
-    commitChaincodeDefinition centralbank
+    # packageChaincode
+    # allinstallChaincode
+    # allqueryInstalled
+    # allapproveForMyOrg
+    # commitChaincodeDefinition centralbank
     queryCommitted centralbank
 }
 
