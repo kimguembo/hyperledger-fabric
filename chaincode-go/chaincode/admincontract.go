@@ -6,6 +6,7 @@ import (
 	"time"
 	"strconv"
 	"github.com/hyperledger/fabric-contract-api-go/contractapi"
+
 )
 
 // SmartContract provides functions for managing an Asset
@@ -22,7 +23,7 @@ type totalBalance struct {
 type issueHistory struct {
 	ID             string `json:"ID"`
 	BankID         string `json:"bankID"`
-	Price          int    `json:"price"`
+	Price          string `json:"price"`
 	Date           string `json:"date"`
 }
 
@@ -120,7 +121,7 @@ func (s *AdminContract) UpdateTotalBalance(ctx contractapi.TransactionContextInt
 
 func (s *AdminContract) ReadTotalBalanceAll(ctx contractapi.TransactionContextInterface) ([]*totalBalance, error) {
 
-	resultsIterator, err := ctx.GetStub().GetStateByRange("", "")
+	resultsIterator, err := ctx.GetStub().GetStateByRange("0", "999")
 
 	if err != nil {
 		return nil, err
@@ -149,7 +150,7 @@ func (s *AdminContract) ReadTotalBalanceAll(ctx contractapi.TransactionContextIn
 	return balances, nil
 }
 
-func (s *AdminContract) TransferBalance(ctx contractapi.TransactionContextInterface, bankID string, price int) error {
+func (s *AdminContract) TransferBalance(ctx contractapi.TransactionContextInterface, bankID string, price string) error {
 
 	id := CBDC_NAME
 	bal, err := s.ReadTotalBalance(ctx)
@@ -157,20 +158,34 @@ func (s *AdminContract) TransferBalance(ctx contractapi.TransactionContextInterf
 	if err != nil {
 		return err
 	}
-
-	newBal := bal.Balance - price
+	
+	priceNum, e := strconv.Atoi(price)
+	if e != nil {
+		return e
+	}
+	newBal := bal.Balance - priceNum
 
 	if newBal < 0 {
 		return fmt.Errorf("Lack of Balance")
 	}
 
 	bal.Balance = newBal
+ 
+	params := []string{"UpdateAccount", bankID, price}
+	queryArgs := make([][]byte, len(params))
 
-	// overwriting original asset with new asset
-	// totalBalanceA := totalBalance{
-	//  ID:             id,
-	//  Balance:        newBal,
-	// }
+	for i, arg := range params {
+		queryArgs[i] = []byte(arg)
+	}
+
+	response := ctx.GetStub().InvokeChaincode("regulatorychaincode", queryArgs, "regulatory-channel")
+	if response.Status != 200 {
+		return fmt.Errorf("Failed to query chaincode. Got Error: %s", response.Payload)
+	}
+	error := ctx.GetStub().PutState(bankID, []byte(response.Payload))
+	if error != nil {
+		return fmt.Errorf("Failed to set asset")
+	}
 	s.TransferHistory(ctx, bankID, price)
 	totalBalanceJSON, err := json.Marshal(bal)
 	if err != nil {
@@ -205,7 +220,7 @@ func (s *AdminContract) ReadTransferHistory(ctx contractapi.TransactionContextIn
 }
 
 
-func (s *AdminContract) TransferHistory(ctx contractapi.TransactionContextInterface, bankID string, price int) error {
+func (s *AdminContract) TransferHistory(ctx contractapi.TransactionContextInterface, bankID string, price string) error {
 	history, err := s.ReadTransferHistory(ctx)
 	if err != nil {
 		return err
@@ -224,4 +239,21 @@ func (s *AdminContract) TransferHistory(ctx contractapi.TransactionContextInterf
 		return err
 	}
 	return ctx.GetStub().PutState(id, hisJSON)
+}
+
+
+func (s *AdminContract) ReadTransferTest(ctx contractapi.TransactionContextInterface) (string, error) {
+
+	params := []string{"ReadAccount", "0"}
+	queryArgs := make([][]byte, len(params))
+
+	for i, arg := range params {
+		queryArgs[i] = []byte(arg)
+	}
+
+	response := ctx.GetStub().InvokeChaincode("userchaincode", queryArgs, "user-channel")
+	if response.Status != 200 {
+		return "", fmt.Errorf("Failed to query chaincode. Got Error: %s", response.Payload)
+	}
+	return string(response.Payload), nil
 }
