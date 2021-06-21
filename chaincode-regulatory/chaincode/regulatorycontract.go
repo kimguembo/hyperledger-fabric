@@ -26,7 +26,7 @@ type Account struct {
 type usageHistory struct {
 	ID 			   string `json:"ID"`
 	Receiver 	   string `json:"receiver"`
-	Price		   int 	  `json:"price"`
+	Price		   string `json:"price"`
 	Date		   string `json:"date"`
 	Sender 		   string `json:"sender"`
 }
@@ -34,8 +34,8 @@ type usageHistory struct {
 func (s *RegulatoryContract) InitAccount(ctx contractapi.TransactionContextInterface) error {
 
 	accounts := []Account{
-		{ID: "0", Name: "Shinhan-Main", Balance: 0},
-		{ID: "1", Name: "Shinhan-Sub", Balance: 0},
+		{ID: "Bank0", Name: "Shinhan-Main", Balance: 0},
+		{ID: "Bank1", Name: "Shinhan-Sub", Balance: 0},
 	}
 
 	for _, account := range accounts {
@@ -73,13 +73,16 @@ func (s *RegulatoryContract) ReadAccount(ctx contractapi.TransactionContextInter
 	return &account, nil
 }
 
-func (s *RegulatoryContract) UpdateAccount(ctx contractapi.TransactionContextInterface, id string, balance int) error {
+func (s *RegulatoryContract) UpdateAccount(ctx contractapi.TransactionContextInterface, id string, balance string) error {
 	account, err := s.ReadAccount(ctx, id)
 	if err != nil {
 		return err
 	}
-
-	account.Balance = account.Balance + balance
+	balNum, e := strconv.Atoi(balance)
+	if e != nil {
+		return e
+	}
+	account.Balance = account.Balance + balNum
 	accountJSON, err := json.Marshal(account)
 	if err != nil {
 		return err
@@ -88,19 +91,39 @@ func (s *RegulatoryContract) UpdateAccount(ctx contractapi.TransactionContextInt
 	return ctx.GetStub().PutState(id, accountJSON)
 }
 
-func (s *RegulatoryContract) UpdateSendBalance(ctx contractapi.TransactionContextInterface, id string, rec string, balance int) error {
+func (s *RegulatoryContract) UpdateSendBalance(ctx contractapi.TransactionContextInterface, id string, rec string, balance string) error {
 	account, err := s.ReadAccount(ctx, id)
 	if err != nil {
 		return err
 	}
-
-	account.Balance = account.Balance - balance
-	accountJSON, err != json.Marshal(account)
+	balNum, e := strconv.Atoi(balance)
+	if e != nil {
+		return e
+	}
+	account.Balance = account.Balance - balNum
+	// accountJSON, err := json.Marshal(account)
 	if err != nil {
 		return err
 	}
 
+	params := []string{"UpdateAccount", id, rec, balance}
+	queryArgs := make([][]byte, len(params))
+
+	for i, arg := range params {
+		queryArgs[i] = []byte(arg)
+	}
+
+	response := ctx.GetStub().InvokeChaincode("userchaincode", queryArgs, "user-channel")
+	if response.Status != 200 {
+		return fmt.Errorf("Failed to query chaincode. Got Error: %s", response.Payload)
+	}
+
 	s.TransferHistory(ctx, id, rec, balance)
+	accountJSON, err := json.Marshal(account)
+	if err != nil {
+		return err
+	}
+	return ctx.GetStub().PutState(id, accountJSON)
 }
 
 func (s *RegulatoryContract) AccountExist(ctx contractapi.TransactionContextInterface, id string) (bool, error) {
@@ -112,23 +135,6 @@ func (s *RegulatoryContract) AccountExist(ctx contractapi.TransactionContextInte
 	return accountJSON != nil, nil
 }
 
-func (s *RegulatoryContract) ReadAccount(ctx contractapi.TransactionContextInterface, id string) (*Account, error) {
-	accountJSON, err := ctx.GetStub().GetState(id)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read from world state: %v", err)
-	}
-	if accountJSON == nil {
-		return nil, fmt.Errorf("the asset %s does not exist", id)
-	}
-
-	var account Account
-	err = json.Unmarshal(accountJSON, &account)
-	if err != nil {
-		return nil, err
-	}
-
-	return &account, nil
-}
 
 func (s *RegulatoryContract) ReadTransferHistory(ctx contractapi.TransactionContextInterface) ([]*usageHistory, error) {
 	historyJSON, err := ctx.GetStub().GetStateByRange("", "")
@@ -153,7 +159,7 @@ func (s *RegulatoryContract) ReadTransferHistory(ctx contractapi.TransactionCont
 	return historys, nil
 }
 
-func (s *RegulatoryContract) TransferHistory(ctx contractapi.TransactionContextInterface, rec string, sen string, price int) error {
+func (s *RegulatoryContract) TransferHistory(ctx contractapi.TransactionContextInterface, rec string, sen string, price string) error {
 	history, err := s.ReadTransferHistory(ctx)
 	if err != nil {
 		return err
