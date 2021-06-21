@@ -3,7 +3,8 @@ package chaincode
 import (
 	"encoding/json"
 	"fmt"
-
+	"time"
+	"strconv"
 	"github.com/hyperledger/fabric-contract-api-go/contractapi"
 )
 
@@ -24,18 +25,25 @@ type UserAccount struct {
 	Balance		   int 	  `json:"balance"`
 }
 
+type AccountHistory struct {
+	ID				string `json:"ID"`
+	Receiver		string `json:"receiver"`
+	Price			string `json:"price"`
+	Date			string `json:"date"`
+	Sender 			string `json:"sender"`
+}
 
 
 // InitLedger adds a base set of assets to the ledger
 func (s *UserContract) InitLedger(ctx contractapi.TransactionContextInterface) error {
 	// 개인 피어 수 만큼 초기 세팅
 	accounts := []UserAccount{
-		{ID: "0", Name: "Hyeon Hee", Balance: 0},
-		{ID: "1", Name: "Geum Bo", Balance: 0},
-		{ID: "2", Name: "", Balance: 0},
-		{ID: "3", Name: "", Balance: 0},
-		{ID: "4", Name: "", Balance: 0},
-		{ID: "5", Name: "", Balance: 0},
+		{ID: "User0", Name: "Hyeon Hee", Balance: 0},
+		{ID: "User1", Name: "Geum Bo", Balance: 0},
+		{ID: "User2", Name: "", Balance: 0},
+		{ID: "User3", Name: "", Balance: 0},
+		{ID: "User4", Name: "", Balance: 0},
+		{ID: "User5", Name: "", Balance: 0},
 	}
 
 	for _, account := range accounts {
@@ -74,20 +82,23 @@ func (s *UserContract) ReadAccount(ctx contractapi.TransactionContextInterface, 
 }
 
 // 은행에서 돈발행 
-func (s *UserContract) UpdateAccount(ctx contractapi.TransactionContextInterface, id string, balance int) error {
+func (s *UserContract) UpdateAccount(ctx contractapi.TransactionContextInterface, bankID string, id string, balance string) error {
 	account, err := s.ReadAccount(ctx, id)
 	if err != nil {
 		return err
 	}
-
-	account.Balance = account.Balance + balance
+	balNum, e := strconv.Atoi(balance)
+	if e != nil {
+		return e
+	}
+	account.Balance = account.Balance + balNum
 	accountJSON, err := json.Marshal(account)
 	if err != nil {
 		return err
 	}
 
 	// 기록 
-
+	s.TransferHistory(ctx, id, bankID, balance)
 	return ctx.GetStub().PutState(id, accountJSON)	
 }
 
@@ -123,6 +134,51 @@ func (s *UserContract) TransferBalanceUser(ctx contractapi.TransactionContextInt
 	ctx.GetStub().PutState(rec, receiverJSON)
 
 	//기록 
-
+	s.TransferHistory(ctx, rec, id, strconv.Itoa(price))
 	return nil	
+}
+
+func (s *UserContract) TransferHistory(ctx contractapi.TransactionContextInterface, rec string, sen string, price string) error {
+	history, err := s.ReadTransferHistory(ctx)
+	if err != nil {
+		return err
+	}
+	id := strconv.Itoa((len(history)+1))
+	now := time.Now()
+	customTime := now.Format("2006-01-02 15:04")
+	his := AccountHistory{
+		ID:			id,
+		Receiver: 	rec,
+		Price:		price,
+		Date:		customTime,
+		Sender:		sen,
+	}
+	hisJSON, err := json.Marshal(his)
+	if err != nil {
+		return err
+	}
+	return ctx.GetStub().PutState(id, hisJSON)
+}
+
+func (s *UserContract) ReadTransferHistory(ctx contractapi.TransactionContextInterface) ([]*AccountHistory, error) {
+	historyJSON, err := ctx.GetStub().GetStateByRange("", "")
+	if err != nil {
+		return nil, err
+	}
+	defer historyJSON.Close()
+	var historys []*AccountHistory
+	for historyJSON.HasNext() {
+		queryResponse, err := historyJSON.Next()
+
+		if err != nil {
+			return nil, err
+		}
+		var history AccountHistory
+		err = json.Unmarshal(queryResponse.Value, &history)
+		if err != nil {
+			return nil, err
+		}
+		historys = append(historys, &history)
+	}
+	return historys, nil
 }
