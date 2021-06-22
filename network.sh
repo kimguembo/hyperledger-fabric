@@ -332,6 +332,7 @@ function clean {
     rm -Rf channel-artifacts
     rm -Rf ./chaincode-go/vendor
     rm -Rf ./chaincode-user/vendor
+    rm -Rf ./chaincode-regulatory/vendor
     rm -Rf ./atcc/vendor
 }
 
@@ -482,6 +483,15 @@ function packageChaincode() {
         cli peer lifecycle chaincode package userchaincode.tar.gz \
             --path /opt/gopath/src/github.com/asset-transfer-basic/chaincode-user \
             --label userchaincode_1.0
+    
+    docker exec -i -t \
+        -w /opt/gopath/src/github.com/asset-transfer-basic/chaincode-regulatory \
+        cli go mod vendor
+
+    docker exec -i -t \
+        cli peer lifecycle chaincode package regulatorychaincode.tar.gz \
+            --path /opt/gopath/src/github.com/asset-transfer-basic/chaincode-regulatory \
+            --label regulatorychaincode_1.0
 
     # my chaincode
     # docker exec -i -t \
@@ -504,6 +514,9 @@ function allinstallChaincode() {
     installChaincode 2 consumer
 
     installChaincode 0 centralbank mychaincode
+    installChaincode 0 centralbank regulatorychaincode
+    installChaincode 0 commercialbank regulatorychaincode
+    installChaincode 1 commercialbank regulatorychaincode
 }
 
 function installChaincode() {
@@ -565,9 +578,21 @@ function allapproveForMyOrg() {
 
     sleep 1
 
-    approveForMyOrg centralbank mychaincode centralbank-channel 3c9beff854f544635245b620e4a3f01061138506f8f52c6e62761e95e8f59da3
+    approveForMyOrg centralbank mychaincode centralbank-channel bb21fadb66cdb0b6fc894d109eed6b95fa1dd5bcc42d7e50d0f6a8f836b4d588
     sleep 1
     checkCommitReadiness centralbank mychaincode centralbank-channel
+    
+    sleep 1
+    approveForMyOrg centralbank regulatorychaincode regulatory-channel b5f52f7be545fefa193370bd84507ae32acfc9650546e815a285e560e4c06201
+    sleep 1
+    checkCommitReadiness centralbank regulatorychaincode regulatory-channel
+    checkCommitReadiness commercialbank regulatorychaincode regulatory-channel
+    
+    sleep 1
+    approveForMyOrg commercialbank regulatorychaincode regulatory-channel b5f52f7be545fefa193370bd84507ae32acfc9650546e815a285e560e4c06201
+    sleep 1
+    checkCommitReadiness centralbank regulatorychaincode regulatory-channel
+    checkCommitReadiness commercialbank regulatorychaincode regulatory-channel
 }
 
 
@@ -576,10 +601,12 @@ function approveForMyOrg() {
     org=${1:-centralbank}
     chaincodeName=${2:-userchaincode}
     channel=${3:-user-channel}
-    packid=${4:-a606cf68193104909c90a1131bb0533b7d2e16b65ee755348f305c68643a0aa5}
+    packid=${4:-b60eaf3e3a0291f132757bcfbe827e7ccf9fc1c8c6d615bf440c653c10197245}
     policy="OR('centralbankOrg.peer'"
     if [ "$channel" == "user-channel" ]; then
         policy+=",'commercialbankOrg.peer','consumerOrg.peer'"
+    elif [ "$channel" == "regulatory-channel" ]; then
+        policy+=",'commercialbankOrg.peer'"
     fi
     
     policy+=')'
@@ -638,6 +665,8 @@ function checkCommitReadiness() {
     policy="OR('centralbankOrg.peer'"
     if [ "$channel" == "user-channel" ]; then
         policy+=",'commercialbankOrg.peer','consumerOrg.peer'"
+    elif [ "$channel" == "regulatory-channel" ]; then
+        policy+=",'commercialbankOrg.peer'"
     fi
     
     policy+=')'
@@ -671,6 +700,8 @@ function commitChaincodeDefinition() {
     policy="OR('centralbankOrg.peer'"
     if [ "$channel" == "user-channel" ]; then
         policy+=",'commercialbankOrg.peer','consumerOrg.peer'"
+    elif [ "$channel" == "regulatory-channel" ]; then
+        policy+=",'commercialbankOrg.peer'"
     fi
 
     policy+=')'
@@ -707,6 +738,89 @@ function commitChaincodeDefinition() {
             --tlsRootCertFiles $PEER_1_CONSUMER_TLS_CA_CERT \
             --peerAddresses peer2.consumer.islab.re.kr:7051 \
             --tlsRootCertFiles $PEER_2_CONSUMER_TLS_CA_CERT \
+            --peerAddresses peer0.centralbank.islab.re.kr:7051 \
+            --tlsRootCertFiles $PEER_0_CENTRALBANK_TLS_CA \
+            --sequence 1 \
+            --signature-policy $policy
+}
+
+function commitChaincodeDefinitionTestR() {
+    org=${1:-centralbank}
+    chaincodeName=${2:-userchaincode}
+    channel=${3:-user-channel}
+  
+    policy="OR('centralbankOrg.peer'"
+    if [ "$channel" == "user-channel" ]; then
+        policy+=",'commercialbankOrg.peer','consumerOrg.peer'"
+    elif [ "$channel" == "regulatory-channel" ]; then
+        policy+=",'commercialbankOrg.peer'"
+    fi
+
+    policy+=')'
+
+    TLS_PATH=/opt/gopath/src/github.com/hyperledger/fabric/peer/organizations/peerOrganizations/${org}.islab.re.kr/peers/peer0.${org}.islab.re.kr/tls
+    ORDERER_CA=/opt/gopath/src/github.com/hyperledger/fabric/peer/organizations/ordererOrganizations/islab.re.kr/orderers/orderer0.islab.re.kr/msp/tlscacerts/tlsca.islab.re.kr-cert.pem
+    PEER_0_COMMERCIALBANK_TLS_CA_CERT=/opt/gopath/src/github.com/hyperledger/fabric/peer/organizations/peerOrganizations/commercialbank.islab.re.kr/peers/peer0.commercialbank.islab.re.kr/tls/ca.crt
+    PEER_1_COMMERCIALBANK_TLS_CA_CERT=/opt/gopath/src/github.com/hyperledger/fabric/peer/organizations/peerOrganizations/commercialbank.islab.re.kr/peers/peer1.commercialbank.islab.re.kr/tls/ca.crt
+    PEER_0_CONSUMER_TLS_CA_CERT=/opt/gopath/src/github.com/hyperledger/fabric/peer/organizations/peerOrganizations/consumer.islab.re.kr/peers/peer0.consumer.islab.re.kr/tls/ca.crt
+    PEER_1_CONSUMER_TLS_CA_CERT=/opt/gopath/src/github.com/hyperledger/fabric/peer/organizations/peerOrganizations/consumer.islab.re.kr/peers/peer1.consumer.islab.re.kr/tls/ca.crt
+    PEER_2_CONSUMER_TLS_CA_CERT=/opt/gopath/src/github.com/hyperledger/fabric/peer/organizations/peerOrganizations/consumer.islab.re.kr/peers/peer2.consumer.islab.re.kr/tls/ca.crt
+    PEER_0_CENTRALBANK_TLS_CA=/opt/gopath/src/github.com/hyperledger/fabric/peer/organizations/peerOrganizations/centralbank.islab.re.kr/peers/peer0.centralbank.islab.re.kr/tls/ca.crt
+    docker exec -i -t \
+        -e CORE_PEER_LOCALMSPID=${org}Org \
+        -e CORE_PEER_TLS_ENABLED=true \
+        -e CORE_PEER_TLS_CERT_FILE=$TLS_PATH/server.crt \
+        -e CORE_PEER_TLS_KEY_FILE=$TLS_PATH/server.key \
+        -e CORE_PEER_TLS_ROOTCERT_FILE=$TLS_PATH/ca.crt \
+        -e CORE_PEER_MSPCONFIGPATH=/opt/gopath/src/github.com/hyperledger/fabric/peer/organizations/peerOrganizations/${org}.islab.re.kr/users/Admin@${org}.islab.re.kr/msp \
+        -e CORE_PEER_ADDRESS=peer0.${org}.islab.re.kr:7051 \
+        cli peer lifecycle chaincode commit \
+            -o orderer0.islab.re.kr:7050 \
+            --tls --cafile $ORDERER_CA \
+            --channelID ${channel} \
+            --name ${chaincodeName} \
+            --version 1.0 \
+            --peerAddresses peer0.commercialbank.islab.re.kr:7051 \
+            --tlsRootCertFiles $PEER_0_COMMERCIALBANK_TLS_CA_CERT \
+            --peerAddresses peer1.commercialbank.islab.re.kr:7051 \
+            --tlsRootCertFiles $PEER_1_COMMERCIALBANK_TLS_CA_CERT \
+            --peerAddresses peer0.centralbank.islab.re.kr:7051 \
+            --tlsRootCertFiles $PEER_0_CENTRALBANK_TLS_CA \
+            --sequence 1 \
+            --signature-policy $policy
+}
+
+function commitChaincodeDefinitionTest() {
+    org=${1:-centralbank}
+    chaincodeName=${2:-userchaincode}
+    channel=${3:-user-channel}
+  
+    policy="OR('centralbankOrg.peer'"
+    if [ "$channel" == "user-channel" ]; then
+        policy+=",'commercialbankOrg.peer','consumerOrg.peer'"
+    elif [ "$channel" == "regulatory-channel" ]; then
+        policy+=",'commercialbankOrg.peer'"
+    fi
+
+    policy+=')'
+
+    TLS_PATH=/opt/gopath/src/github.com/hyperledger/fabric/peer/organizations/peerOrganizations/${org}.islab.re.kr/peers/peer0.${org}.islab.re.kr/tls
+    ORDERER_CA=/opt/gopath/src/github.com/hyperledger/fabric/peer/organizations/ordererOrganizations/islab.re.kr/orderers/orderer0.islab.re.kr/msp/tlscacerts/tlsca.islab.re.kr-cert.pem
+    PEER_0_CENTRALBANK_TLS_CA=$TLS_PATH/ca.crt
+    docker exec -i -t \
+        -e CORE_PEER_LOCALMSPID=${org}Org \
+        -e CORE_PEER_TLS_ENABLED=true \
+        -e CORE_PEER_TLS_CERT_FILE=$TLS_PATH/server.crt \
+        -e CORE_PEER_TLS_KEY_FILE=$TLS_PATH/server.key \
+        -e CORE_PEER_TLS_ROOTCERT_FILE=$TLS_PATH/ca.crt \
+        -e CORE_PEER_MSPCONFIGPATH=/opt/gopath/src/github.com/hyperledger/fabric/peer/organizations/peerOrganizations/${org}.islab.re.kr/users/Admin@${org}.islab.re.kr/msp \
+        -e CORE_PEER_ADDRESS=peer0.${org}.islab.re.kr:7051 \
+        cli peer lifecycle chaincode commit \
+            -o orderer0.islab.re.kr:7050 \
+            --tls --cafile $ORDERER_CA \
+            --channelID ${channel} \
+            --name ${chaincodeName} \
+            --version 1.0 \
             --peerAddresses peer0.centralbank.islab.re.kr:7051 \
             --tlsRootCertFiles $PEER_0_CENTRALBANK_TLS_CA \
             --sequence 1 \
@@ -752,8 +866,12 @@ function chaincodeInvoke() {
             --tls --cafile $ORDERER_CA \
             --channelID ${channel} \
             --name ${chaincodeName} \
-            -c '{"Args":["InitBalance"]}'
-            # -c '{"Args":["UpdateTotalBalance", "9000"]}'
+            -c '{"Args":["TransferBalance", "Bank1", "1000"]}'
+            # -c '{"Args":["UpdateTotalBalance", "5000"]}'
+            # -c '{"Args":["InitAccount"]}'
+            # -c '{"Args":["InitBalance"]}'
+            # -c '{"Args":["TransferTest"]}'
+            # -c '{"Args":["TransferBalance", "shinhan", "2000"]}'
             # -c '{"Args":["InitLedger"]}'
 
 
@@ -777,9 +895,10 @@ function chaincodeInvokeTest() {
             --tls --cafile $ORDERER_CA \
             --channelID ${channel} \
             --name ${chaincodeName} \
-            -c '{"Args":["InitLedger"]}'
-            # -c '{"Args":["InitBalance"]}'
+            -c '{"Args":["TransferBalance", "Bank3", "1000"]}'
+            # -c '{"Args":["InitLedger"]}'
             # -c '{"Args":["UpdateTotalBalance", "9000"]}'
+            # -c '{"Args":["InitBalance"]}'
 
 
 }
@@ -801,13 +920,34 @@ function chaincodeQuery() {
         cli peer chaincode query \
             --channelID ${channel} \
             --name ${chaincodeName} \
-            -c '{"Args":["ReadTotalBalance"]}'
+            -c '{"Args":["ReadAccount", "Bank0"]}'
+            # -c '{"Args":["ReadTotalBalance"]}'
+            # -c '{"Args":["ReadTransferHistory"]}'
             # -c '{"Args":["ReadTotalBalanceAll"]}'
+            # -c '{"Args":["ReadTotalBalance"]}'
 
             
 }
 
 function chaincodeQueryTest() {
+    # org=${1:-centralbank}
+    # chaincodeName=${2:-userchaincode}
+    # channel=${3:-user-channel}
+    # TLS_PATH=/opt/gopath/src/github.com/hyperledger/fabric/peer/organizations/peerOrganizations/${org}.islab.re.kr/peers/peer0.${org}.islab.re.kr/tls
+    # ORDERER_CA=/opt/gopath/src/github.com/hyperledger/fabric/peer/organizations/ordererOrganizations/islab.re.kr/orderers/orderer0.islab.re.kr/msp/tlscacerts/tlsca.islab.re.kr-cert.pem
+    # docker exec -i -t \
+    #     -e CORE_PEER_LOCALMSPID=${org}Org \
+    #     -e CORE_PEER_TLS_ENABLED=true \
+    #     -e CORE_PEER_TLS_CERT_FILE=$TLS_PATH/server.crt \
+    #     -e CORE_PEER_TLS_KEY_FILE=$TLS_PATH/server.key \
+    #     -e CORE_PEER_TLS_ROOTCERT_FILE=$TLS_PATH/ca.crt \
+    #     -e CORE_PEER_MSPCONFIGPATH=/opt/gopath/src/github.com/hyperledger/fabric/peer/organizations/peerOrganizations/${org}.islab.re.kr/users/Admin@${org}.islab.re.kr/msp \
+    #     -e CORE_PEER_ADDRESS=peer0.${org}.islab.re.kr:7051 \
+    #     cli peer chaincode query \
+    #         --channelID ${channel} \
+    #         --name ${chaincodeName} \
+            # -c '{"Args":["GetAllAssets"]}'
+            # -c '{"Args":["ReadTotalBalanceAll"]}'
     org=${1:-centralbank}
     chaincodeName=${2:-userchaincode}
     channel=${3:-user-channel}
@@ -821,12 +961,7 @@ function chaincodeQueryTest() {
         -e CORE_PEER_TLS_ROOTCERT_FILE=$TLS_PATH/ca.crt \
         -e CORE_PEER_MSPCONFIGPATH=/opt/gopath/src/github.com/hyperledger/fabric/peer/organizations/peerOrganizations/${org}.islab.re.kr/users/Admin@${org}.islab.re.kr/msp \
         -e CORE_PEER_ADDRESS=peer0.${org}.islab.re.kr:7051 \
-        cli peer chaincode query \
-            --channelID ${channel} \
-            --name ${chaincodeName} \
-            -c '{"Args":["GetAllAssets"]}'
-            # -c '{"Args":["ReadTotalBalanceAll"]}'
-
+        cli peer channel list 
             
 }
 
@@ -885,25 +1020,30 @@ function all {
 }
 
 function chaincode_install {
-    # packageChaincode
-    # allinstallChaincode
-    # allqueryInstalled
+    packageChaincode
+    allinstallChaincode
+    allqueryInstalled
     # allapproveForMyOrg
     # commitChaincodeDefinition centralbank
-    # commitChaincodeDefinition centralbank mychaincode centralbank-channel
-    queryCommitted centralbank
-    queryCommitted centralbank mychaincode centralbank-channel
+    # commitChaincodeDefinitionTest centralbank mychaincode centralbank-channel
+    # commitChaincodeDefinitionTestR centralbank regulatorychaincode regulatory-channel
+    # queryCommitted centralbank
+    # queryCommitted centralbank mychaincode centralbank-channel
+    # queryCommitted centralbank regulatorychaincode regulatory-channel
+    # queryCommitted commercialbank regulatorychaincode regulatory-channel
 }
 
 function chaincode_invoke {
     # chaincodeInvokeTest centralbank
+    # chaincodeInvoke centralbank regulatorychaincode regulatory-channel
     chaincodeInvoke centralbank mychaincode centralbank-channel
-
+    # chaincodeInvoke centralbank mychaincode centralbank-channel
     # chaincodeList centralbank
 }
 
 function chaincode_query {
-    chaincodeQuery centralbank mychaincode centralbank-channel
+    # chaincodeQuery centralbank mychaincode centralbank-channel
+    chaincodeQuery centralbank regulatorychaincode regulatory-channel
     # chaincodeQueryTest centralbank
 }
 
