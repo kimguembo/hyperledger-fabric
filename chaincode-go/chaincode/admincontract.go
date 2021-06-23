@@ -35,7 +35,7 @@ const (
 func (s *AdminContract) InitBalance(ctx contractapi.TransactionContextInterface) error {
 
 	balances := []totalBalance{
-		{ID: CBDC_NAME, Balance: 1000, TBalance: 1000},
+		{ID: CBDC_NAME, Balance: 0, TBalance: 0},
 	}
 	for _, balance := range balances {
 		balanceJSON, err := json.Marshal(balance)
