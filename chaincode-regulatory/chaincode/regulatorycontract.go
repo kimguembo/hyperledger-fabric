@@ -96,6 +96,25 @@ func (s *RegulatoryContract) UpdateAccount(ctx contractapi.TransactionContextInt
 	return ctx.GetStub().PutState(id, accountJSON)
 }
 
+func (s *RegulatoryContract) UpdateAccountUser(ctx contractapi.TransactionContextInterface, id string, userID string, balance string) error {
+	account, err := s.ReadAccount(ctx, id)
+	if err != nil {
+		return err
+	}
+	balNum, e := strconv.Atoi(balance)
+	if e != nil {
+		return e
+	}
+
+	account.Balance = account.Balance + balNum
+	accountJSON, err := json.Marshal(account)
+	if err != nil {
+		return err
+	}
+	// s.TransferHistory(ctx, userID, id, balance)
+	return ctx.GetStub().PutState(id, accountJSON)
+}
+
 func (s *RegulatoryContract) UpdateSendBalance(ctx contractapi.TransactionContextInterface, id string, rec string, balance string) error {
 	account, err := s.ReadAccount(ctx, id)
 	if err != nil {
@@ -132,6 +151,48 @@ func (s *RegulatoryContract) UpdateSendBalance(ctx contractapi.TransactionContex
 	}
 
 	s.TransferHistory(ctx, id, rec, balance)
+	accountJSON, err := json.Marshal(account)
+	if err != nil {
+		return err
+	}
+	return ctx.GetStub().PutState(id, accountJSON)
+}
+
+func (s *RegulatoryContract) UpdateUserBalance(ctx contractapi.TransactionContextInterface, id string, rec string, balance string) error {
+	account, err := s.ReadAccount(ctx, id)
+	if err != nil {
+		return err
+	}
+	balNum, e := strconv.Atoi(balance)
+	if e != nil {
+		return e
+	}
+
+	change := account.Balance - balNum
+	
+	if change < 0 {
+		return fmt.Errorf("Lack of Balance")
+	}
+
+	account.Balance = change
+	
+	// accountJSON, err := json.Marshal(account)
+	if err != nil {
+		return err
+	}
+
+	params := []string{"UpdateAccount", id, rec, balance}
+	queryArgs := make([][]byte, len(params))
+
+	for i, arg := range params {
+		queryArgs[i] = []byte(arg)
+	}
+
+	response := ctx.GetStub().InvokeChaincode("userchaincode", queryArgs, "user-channel")
+	if response.Status != 200 {
+		return fmt.Errorf("Failed to query chaincode. Got Error: %s", response.Payload)
+	}
+
 	accountJSON, err := json.Marshal(account)
 	if err != nil {
 		return err
