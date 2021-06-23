@@ -15,8 +15,9 @@ type UserContract struct {
 	contractapi.Contract
 }
 
-
-
+const (
+	MAX_VAL int = 1000
+)
 
 // Asset describes basic details of what makes up a simple asset
 type UserAccount struct {
@@ -40,10 +41,7 @@ func (s *UserContract) InitLedger(ctx contractapi.TransactionContextInterface) e
 	accounts := []UserAccount{
 		{ID: "User0", Name: "Hyeon Hee", Balance: 0},
 		{ID: "User1", Name: "Geum Bo", Balance: 0},
-		{ID: "User2", Name: "", Balance: 0},
-		{ID: "User3", Name: "", Balance: 0},
-		{ID: "User4", Name: "", Balance: 0},
-		{ID: "User5", Name: "", Balance: 0},
+		{ID: "User2", Name: "Test", Balance: 0},
 	}
 
 	for _, account := range accounts {
@@ -91,7 +89,12 @@ func (s *UserContract) UpdateAccount(ctx contractapi.TransactionContextInterface
 	if e != nil {
 		return e
 	}
-	account.Balance = account.Balance + balNum
+
+	newBal := account.Balance + balNum
+	if newBal > MAX_VAL {
+		return fmt.Errorf("Individuals cannot own more than %s in CBDC.", MAX_VAL)
+	}
+	account.Balance = newBal
 	accountJSON, err := json.Marshal(account)
 	if err != nil {
 		return err
@@ -117,6 +120,9 @@ func (s *UserContract) TransferBalanceUser(ctx contractapi.TransactionContextInt
 	rBal := receiver.Balance + price
 	if sBal < 0 {
 		return fmt.Errorf("Lack of balance %s's Account", id)
+	}
+	if rBal > MAX_VAL {
+		return fmt.Errorf("Individuals cannot own more than %s in CBDC.", MAX_VAL)
 	}
 	sender.Balance = sBal
 	receiver.Balance = rBal
@@ -161,7 +167,7 @@ func (s *UserContract) TransferHistory(ctx contractapi.TransactionContextInterfa
 }
 
 func (s *UserContract) ReadTransferHistory(ctx contractapi.TransactionContextInterface) ([]*AccountHistory, error) {
-	historyJSON, err := ctx.GetStub().GetStateByRange("", "")
+	historyJSON, err := ctx.GetStub().GetStateByRange("0", "999")
 	if err != nil {
 		return nil, err
 	}

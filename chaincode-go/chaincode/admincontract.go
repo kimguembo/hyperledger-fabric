@@ -169,6 +169,10 @@ func (s *AdminContract) TransferBalance(ctx contractapi.TransactionContextInterf
 		return fmt.Errorf("Lack of Balance")
 	}
 
+	if bankID != "Bank0" {
+		return fmt.Errorf("Only the head office of a bank can issue a CBDC from the central bank!!")
+	}
+
 	bal.Balance = newBal
  
 	params := []string{"UpdateAccount", bankID, price}
@@ -198,7 +202,7 @@ func (s *AdminContract) TransferBalance(ctx contractapi.TransactionContextInterf
 // ReadAsset returns the asset stored in the world state with given id.
 
 func (s *AdminContract) ReadTransferHistory(ctx contractapi.TransactionContextInterface) ([]*issueHistory, error) {
-	hisoryJSON, err := ctx.GetStub().GetStateByRange("", "")
+	hisoryJSON, err := ctx.GetStub().GetStateByRange("0", "999")
 	if err != nil {
 		return nil, err
 	}

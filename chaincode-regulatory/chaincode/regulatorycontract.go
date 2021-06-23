@@ -82,6 +82,11 @@ func (s *RegulatoryContract) UpdateAccount(ctx contractapi.TransactionContextInt
 	if e != nil {
 		return e
 	}
+
+	if id != "Bank0" {
+		return fmt.Errorf("Only the head office of a bank can issue a CBDC from the central bank!!")
+	}
+
 	account.Balance = account.Balance + balNum
 	accountJSON, err := json.Marshal(account)
 	if err != nil {
@@ -137,7 +142,7 @@ func (s *RegulatoryContract) AccountExist(ctx contractapi.TransactionContextInte
 
 
 func (s *RegulatoryContract) ReadTransferHistory(ctx contractapi.TransactionContextInterface) ([]*usageHistory, error) {
-	historyJSON, err := ctx.GetStub().GetStateByRange("", "")
+	historyJSON, err := ctx.GetStub().GetStateByRange("0", "999")
 	if err != nil {
 		return nil, err
 	}
@@ -179,4 +184,43 @@ func (s *RegulatoryContract) TransferHistory(ctx contractapi.TransactionContextI
 		return err
 	}
 	return ctx.GetStub().PutState(id, hisJSON)
+}
+
+func (s *RegulatoryContract) TransferBalanceBank(ctx contractapi.TransactionContextInterface, id string, rec string, price string) error {
+	sender, err := s.ReadAccount(ctx, id)
+	if err != nil {
+		return err
+	}
+	receiver, err := s.ReadAccount(ctx, rec)
+	if err != nil {
+		return err
+	}
+
+	priceNum, e := strconv.Atoi(price)
+	if e != nil {
+		return e
+	}
+
+	sBal := sender.Balance - priceNum
+	rBal := receiver.Balance + priceNum
+	if sBal < 0 {
+		return fmt.Errorf("Lack of balance %s's Account", id)
+	}
+
+	sender.Balance = sBal
+	receiver.Balance = rBal
+
+	senderJSON, sErr := json.Marshal(sender)
+	if sErr != nil {
+		return sErr
+	}
+	receiverJSON, rErr := json.Marshal(receiver)
+	if rErr != nil {
+		return rErr
+	}
+	ctx.GetStub().PutState(id, senderJSON)
+	ctx.GetStub().PutState(rec, receiverJSON)
+
+	s.TransferHistory(ctx, rec, id, price)
+	return nil
 }
