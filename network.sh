@@ -584,7 +584,7 @@ function chaincode_transfer {
 
     if [ "$bank" == "" ] || [ "$price" == "" ]; then
         echo "Please input the bank and price date"
-        echo "ex) chaincode invoke centralbank issuanceUser 0 5000"
+        echo "ex) chaincode invoke centralbank issuanceCentralbank 0 5000"
         exit 0
     fi
 
@@ -622,7 +622,7 @@ function chaincode_transfer_user {
         QUERY_TYPE='UpdateSendBalance'
     fi
 
-    if [ "$bank" == "" ] || [ "$user" == "" ] || [ "$price" == ""]; then
+    if [ "$bank" == "" ] || [ "$user" == "" ] || [ "$price" == "" ]; then
         echo "Please input the bank, user and price data"
         echo "ex) chaincode invoke regulatory issuanceRegulatory 0 0 5000"
         exit 0
@@ -656,7 +656,7 @@ function chaincode_transfer_cbdc_user {
     receiver=$5
     price=$6
 
-    if [ "$sender" == "" ] || [ "$receiver" == ""] || [ "$price" == ""]; then
+    if [ "$sender" == "" ] || [ "$receiver" == "" ] || [ "$price" == "" ]; then
         echo "Please input the send user, receiver user and price data"
         echo "ex) chaincode invoke consumer issuanceUser 0 1 500"
         exit 0
@@ -732,7 +732,7 @@ function chaincode_invoke_regulatory {
         exit 0
     fi
 
-    query={'"'Args'"':['"'$QUERY_TYPE'"','"'Bank$sender'"','"'Bank$receiver'"','"'$price'"']}
+    query={'"'Args'"':['"'TransferBalanceBank'"','"'Bank$sender'"','"'Bank$receiver'"','"'$price'"']}
     
     TLS_PATH=/opt/gopath/src/github.com/hyperledger/fabric/peer/organizations/peerOrganizations/${org}.islab.re.kr/peers/peer0.${org}.islab.re.kr/tls
     ORDERER_CA=/opt/gopath/src/github.com/hyperledger/fabric/peer/organizations/ordererOrganizations/islab.re.kr/orderers/orderer0.islab.re.kr/msp/tlscacerts/tlsca.islab.re.kr-cert.pem
@@ -935,9 +935,9 @@ function chaincode_query {
         fi
     elif [ "$object" == 'consumer' ]; then
         if [ "$method" == 'viewUserAccount' ]; then
-            chaincodeQuery consumer userchaincode user-channel ReadAccount User$1
+            chaincodeQuery commercialbank userchaincode user-channel ReadAccount User$1
         elif [ "$method" == 'viewRecordAccount' ]; then
-            chaincodeQuery consumer userchaincode user-channel ReadTransferHistory
+            chaincodeQuery commercialbank userchaincode user-channel ReadTransferHistory
         else
             query_help $object
         fi
@@ -1042,7 +1042,7 @@ function chaincode_transfer_admin {
 
 function chaincode_transfer_regulatory {
     chaincode_transfer_user commercialbank regulatorychaincode regulatory-channel $1 $2 $3
-    chaincode_transfer_user consumer userchaincode user-channel $1 $2 $3
+    chaincode_transfer_user commercialbank userchaincode user-channel $1 $2 $3
 }
 
 
