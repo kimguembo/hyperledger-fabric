@@ -269,18 +269,18 @@ function allapproveForMyOrg() {
 
     sleep 1
 
-    approveForMyOrg centralbank mychaincode centralbank-channel c7cefab187ed5164af0b18e6b62fdab17eb3c24743f8b8f8bc19abca0d9f4616
+    approveForMyOrg centralbank mychaincode centralbank-channel e8092266ff3b775215fbca08c6fdaa78ba757bb445276c7633446ddd61474f51
     sleep 1
     checkCommitReadiness centralbank mychaincode centralbank-channel
     
     sleep 1
-    approveForMyOrg centralbank regulatorychaincode regulatory-channel 56c76d26575536c22806bf0ff3f3fe36b6a4ee75fd4f2b5bd46d4107d2effdfe
+    approveForMyOrg centralbank regulatorychaincode regulatory-channel 170daa7a0c014f7a93a7c521c8024c8833e7a7bf8700758e0eabdfd62d1225e6
     sleep 1
     checkCommitReadiness centralbank regulatorychaincode regulatory-channel
     checkCommitReadiness commercialbank regulatorychaincode regulatory-channel
     
     sleep 1
-    approveForMyOrg commercialbank regulatorychaincode regulatory-channel 56c76d26575536c22806bf0ff3f3fe36b6a4ee75fd4f2b5bd46d4107d2effdfe
+    approveForMyOrg commercialbank regulatorychaincode regulatory-channel 170daa7a0c014f7a93a7c521c8024c8833e7a7bf8700758e0eabdfd62d1225e6
     sleep 1
     checkCommitReadiness centralbank regulatorychaincode regulatory-channel
     checkCommitReadiness commercialbank regulatorychaincode regulatory-channel
@@ -292,7 +292,7 @@ function approveForMyOrg() {
     org=${1:-centralbank}
     chaincodeName=${2:-userchaincode}
     channel=${3:-user-channel}
-    packid=${4:-577bfb74b54e06eca65bcd3c3407f13358057f47bdfe0b9f888a792c74b762bb}
+    packid=${4:-0064fb1abbfc96d67a80bd05353bc4e7cc77d0e7bdd1effa1aa12683c7f22152}
     policy="OR('centralbankOrg.peer'"
     if [ "$channel" == "user-channel" ]; then
         policy+=",'commercialbankOrg.peer','consumerOrg.peer'"
@@ -648,13 +648,55 @@ function chaincode_transfer_user {
             -c $query
 }
 
-function chaincode_transfer_cbdc_user {
+function chaincode_transfer_user_to_user {
+    org=${1:-consumer}
+    chaincodeName=${2:-userchaincode}
+    channel=${3:-user-channel}
+    bank=$4
+    user=$5
+    price=$6
+
+    if [ "$channel" == "user-channel" ]; then
+        QUERY_TYPE='UpdateUserAccount'
+    elif [ "$channel" == "regulatory-channel" ]; then
+        QUERY_TYPE='UpdateUserBalance'
+    fi
+
+    query={'"'Args'"':['"'$QUERY_TYPE'"','"'Bank$bank'"','"'User$user'"','"'$price'"']}
+    
+    TLS_PATH=/opt/gopath/src/github.com/hyperledger/fabric/peer/organizations/peerOrganizations/${org}.islab.re.kr/peers/peer0.${org}.islab.re.kr/tls
+    ORDERER_CA=/opt/gopath/src/github.com/hyperledger/fabric/peer/organizations/ordererOrganizations/islab.re.kr/orderers/orderer0.islab.re.kr/msp/tlscacerts/tlsca.islab.re.kr-cert.pem
+    docker exec -i -t \
+        -e CORE_PEER_LOCALMSPID=${org}Org \
+        -e CORE_PEER_TLS_ENABLED=true \
+        -e CORE_PEER_TLS_CERT_FILE=$TLS_PATH/server.crt \
+        -e CORE_PEER_TLS_KEY_FILE=$TLS_PATH/server.key \
+        -e CORE_PEER_TLS_ROOTCERT_FILE=$TLS_PATH/ca.crt \
+        -e CORE_PEER_MSPCONFIGPATH=/opt/gopath/src/github.com/hyperledger/fabric/peer/organizations/peerOrganizations/${org}.islab.re.kr/users/Admin@${org}.islab.re.kr/msp \
+        -e CORE_PEER_ADDRESS=peer0.${org}.islab.re.kr:7051 \
+        cli peer chaincode invoke \
+            -o orderer0.islab.re.kr:7050 \
+            --tls --cafile $ORDERER_CA \
+            --channelID ${channel} \
+            --name ${chaincodeName} \
+            -c $query
+}
+
+function chaincode_transfer_cbdc_user_fn {
     org=${1:-consumer}
     chaincodeName=${2:-userchaincode}
     channel=${3:-user-channel}
     sender=$4
     receiver=$5
     price=$6
+    arg=$7
+
+    QUERY_TYPE=''
+    if [ "$channel" == "user-channel" ]; then
+        QUERY_TYPE='TransferBalanceUser'
+    elif [ "$channel" == "regulatory-channel" ]; then
+        QUERY_TYPE='UpdateAccountUser'
+    fi
 
     if [ "$sender" == "" ] || [ "$receiver" == "" ] || [ "$price" == "" ]; then
         echo "Please input the send user, receiver user and price data"
@@ -662,7 +704,17 @@ function chaincode_transfer_cbdc_user {
         exit 0
     fi
 
-    query={'"'Args'"':['"'TransferBalanceUser'"','"'User$sender'"','"'User$receiver'"','"'$price'"']}
+    query={'"'Args'"':['"'$QUERY_TYPE'"'
+    
+    if [ "$QUERY_TYPE" == "TransferBalanceUser" ]; then
+        query+=,'"'$sender'"','"'User$receiver'"','"'User$price'"','"'$arg'"']}
+    elif [ "$QUERY_TYPE" == "UpdateAccountUser" ]; then
+        query+=,'"'$sender'"','"'User$receiver'"','"'$arg'"']}
+    fi 
+    
+    
+    
+    # ,'"'User$sender'"','"'User$receiver'"','"'$price'"']}
     
     TLS_PATH=/opt/gopath/src/github.com/hyperledger/fabric/peer/organizations/peerOrganizations/${org}.islab.re.kr/peers/peer0.${org}.islab.re.kr/tls
     ORDERER_CA=/opt/gopath/src/github.com/hyperledger/fabric/peer/organizations/ordererOrganizations/islab.re.kr/orderers/orderer0.islab.re.kr/msp/tlscacerts/tlsca.islab.re.kr-cert.pem
@@ -851,9 +903,9 @@ function all {
 }
 
 function chaincode_install {
-    # packageChaincode
-    # allinstallChaincode
-    # allqueryInstalled
+    packageChaincode
+    allinstallChaincode
+    allqueryInstalled
     # allapproveForMyOrg
     # commitChaincodeDefinition centralbank
     # commitChaincodeDefinitionTest centralbank mychaincode centralbank-channel
@@ -864,9 +916,9 @@ function chaincode_install {
     # queryCommitted centralbank regulatorychaincode regulatory-channel
     # queryCommitted commercialbank regulatorychaincode regulatory-channel
 
-    chaincodeInvokeInit centralbank mychaincode centralbank-channel
-    chaincodeInvokeInit commercialbank regulatorychaincode regulatory-channel
-    chaincodeInvokeInit centralbank userchaincode user-channel
+    # chaincodeInvokeInit centralbank mychaincode centralbank-channel
+    # chaincodeInvokeInit commercialbank regulatorychaincode regulatory-channel
+    # chaincodeInvokeInit centralbank userchaincode user-channel
     
 }
 
@@ -894,7 +946,7 @@ function chaincode_invoke {
         fi
     elif [ "$object" == 'consumer' ]; then
         if [ "$method" == 'issuanceUser' ]; then
-            chaincode_transfer_cbdc_user commercialbank userchaincode user-channel $1 $2 $3
+            chaincode_transfer_cbdc_user $1 $2 $3
         else
             invoke_help $object
         fi
@@ -937,7 +989,7 @@ function chaincode_query {
         if [ "$method" == 'viewUserAccount' ]; then
             chaincodeQuery commercialbank userchaincode user-channel ReadAccount User$1
         elif [ "$method" == 'viewRecordAccount' ]; then
-            chaincodeQuery commercialbank userchaincode user-channel ReadTransferHistory
+            chaincodeQuery commercialbank userchaincode user-channel ReadHistoryUserOnly User$1
         else
             query_help $object
         fi
@@ -1027,7 +1079,8 @@ function query_help {
         echo "ex) chaincode query consumer viewUserAccount 0"
         echo " "
         echo "viewRecordAccount is a function that can check the user's transaction record."
-        echo "ex) chaincode query consumer viewRecordAccount"
+        echo "It is Requires the user code parameter."
+        echo "ex) chaincode query consumer viewRecordAccount 0"
     else 
         echo 'Please enter the valid user'
         echo 'Type are centralbank, regulatory, consumer'
@@ -1049,6 +1102,19 @@ function chaincode_transfer_regulatory {
     fi
 }
 
+function chaincode_transfer_cbdc_user {
+    chaincode_transfer_cbdc_user_fn commercialbank userchaincode user-channel Bank1 $1 $2 $3
+    if [ $? == 0 ]; then
+        chaincode_transfer_cbdc_user_fn commercialbank regulatorychaincode regulatory-channel Bank1 $1 $2 $3
+        if [ $? == 0 ]; then
+            sleep 2
+            chaincode_transfer_user_to_user commercialbank regulatorychaincode regulatory-channel 1 $2 $3
+            if [ $? == 0 ]; then
+                chaincode_transfer_user_to_user commercialbank userchaincode user-channel 1 $2 $3
+            fi
+        fi
+    fi
+} 
 
 function chaincode {
     case $1 in
