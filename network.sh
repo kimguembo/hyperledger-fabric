@@ -269,18 +269,18 @@ function allapproveForMyOrg() {
 
     sleep 1
 
-    approveForMyOrg centralbank mychaincode centralbank-channel 4dc22159ed15f60b59e32b38e5e6e0dac0e84df72177536f125db3af8c4d9fd6
+    approveForMyOrg centralbank mychaincode centralbank-channel c7cefab187ed5164af0b18e6b62fdab17eb3c24743f8b8f8bc19abca0d9f4616
     sleep 1
     checkCommitReadiness centralbank mychaincode centralbank-channel
     
     sleep 1
-    approveForMyOrg centralbank regulatorychaincode regulatory-channel ec6c6c61e72821394dc010cb2f504b19cb2575ffe16ce52d2608f8178b2730bc
+    approveForMyOrg centralbank regulatorychaincode regulatory-channel 56c76d26575536c22806bf0ff3f3fe36b6a4ee75fd4f2b5bd46d4107d2effdfe
     sleep 1
     checkCommitReadiness centralbank regulatorychaincode regulatory-channel
     checkCommitReadiness commercialbank regulatorychaincode regulatory-channel
     
     sleep 1
-    approveForMyOrg commercialbank regulatorychaincode regulatory-channel ec6c6c61e72821394dc010cb2f504b19cb2575ffe16ce52d2608f8178b2730bc
+    approveForMyOrg commercialbank regulatorychaincode regulatory-channel 56c76d26575536c22806bf0ff3f3fe36b6a4ee75fd4f2b5bd46d4107d2effdfe
     sleep 1
     checkCommitReadiness centralbank regulatorychaincode regulatory-channel
     checkCommitReadiness commercialbank regulatorychaincode regulatory-channel
@@ -864,8 +864,8 @@ function chaincode_install {
     # queryCommitted centralbank regulatorychaincode regulatory-channel
     # queryCommitted commercialbank regulatorychaincode regulatory-channel
 
-    # chaincodeInvokeInit centralbank mychaincode centralbank-channel
-    # chaincodeInvokeInit commercialbank regulatorychaincode regulatory-channel
+    chaincodeInvokeInit centralbank mychaincode centralbank-channel
+    chaincodeInvokeInit commercialbank regulatorychaincode regulatory-channel
     chaincodeInvokeInit centralbank userchaincode user-channel
     
 }
@@ -1037,12 +1037,16 @@ function query_help {
 
 function chaincode_transfer_admin {
     chaincode_transfer centralbank mychaincode centralbank-channel $1 $2
-    chaincode_transfer commercialbank regulatorychaincode regulatory-channel $1 $2
+    if [ $? == 0 ]; then 
+        chaincode_transfer commercialbank regulatorychaincode regulatory-channel $1 $2
+    fi
 }
 
 function chaincode_transfer_regulatory {
     chaincode_transfer_user commercialbank regulatorychaincode regulatory-channel $1 $2 $3
-    chaincode_transfer_user commercialbank userchaincode user-channel $1 $2 $3
+    if [ $? == 0 ]; then    
+        chaincode_transfer_user commercialbank userchaincode user-channel $1 $2 $3
+    fi
 }
 
 

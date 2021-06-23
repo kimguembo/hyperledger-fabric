@@ -105,7 +105,15 @@ func (s *RegulatoryContract) UpdateSendBalance(ctx contractapi.TransactionContex
 	if e != nil {
 		return e
 	}
-	account.Balance = account.Balance - balNum
+
+	change := account.Balance - balNum
+	
+	if change < 0 {
+		return fmt.Errorf("Lack of Balance")
+	}
+
+	account.Balance = change
+	
 	// accountJSON, err := json.Marshal(account)
 	if err != nil {
 		return err

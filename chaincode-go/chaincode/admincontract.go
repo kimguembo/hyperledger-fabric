@@ -80,6 +80,8 @@ func (s *AdminContract) ReadTotalBalance(ctx contractapi.TransactionContextInter
 
 }
 
+
+
 // UpdateAsset updates an existing asset in the world state with provided parameters.
 
 func (s *AdminContract) UpdateTotalBalance(ctx contractapi.TransactionContextInterface, newBalance int) error {
@@ -114,6 +116,8 @@ func (s *AdminContract) UpdateTotalBalance(ctx contractapi.TransactionContextInt
 	if err != nil {
 		return err
 	}
+
+	s.TransferHistory(ctx, id, strconv.Itoa(newBalance))
 
 	return ctx.GetStub().PutState(id, totalBalanceJSON)
 
